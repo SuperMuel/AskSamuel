@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
+from langsmith import Client
 from pydantic import BaseModel, Field, model_validator
 
 from src.settings import settings
@@ -33,31 +34,30 @@ def load_portfolio() -> str:
     return response.text
 
 
+@st.cache_data
+def load_system_prompt(portfolio_content: str) -> str:
+    """Load system prompt from LangSmith and format it with portfolio content."""
+    try:
+        client = Client()
+        prompt_template = client.pull_prompt(
+            settings.langsmith_prompt_reference,
+        )
+
+        # Format the prompt with the portfolio content
+        formatted_prompt = prompt_template.invoke(
+            {"portfolio_content": portfolio_content}
+        )
+
+        return str(formatted_prompt)
+    except Exception as e:
+        logger.error(f"Error loading prompt from LangSmith: {e}")
+        raise e
+
+
 portfolio_content: str = load_portfolio()
 
-# System prompt
-system_prompt = f"""
-You are an interactive AI chatbot acting as a dynamic gateway to Samuel's portfolio.
-Your goal is to demonstrate Samuel's skills as an AI Engineer while providing information about his work, projects, and experience.
-The entire portfolio is provided below for your reference. Always base your answers on this content.
-
-<portfolio>
-{portfolio_content}
-</portfolio>
-
-Key guidelines:
-- Answer questions about Samuel's projects, skills, experience, etc., using the portfolio.
-- Provide links as markdown when mentioning companies or projects (e.g., [Syncademic](https://syncademic.io)).
-- For contact: If the user wants to contact Samuel (e.g., job offer, questions), use the 'contact' tool.
-  - First, ask for necessary details: name, email, company (optional), subject, content.
-  - Ask for confirmation before sending.
-  - If tool succeeds, confirm message sent.
-  - If fails, provide a mailto link like: [Email Samuel](mailto:samuel@example.com?subject=Your%20Subject&body=Your%20Content) (replace with actual details).
-  - Don't ask for information that the user already provided in previous messages.
-- Always respond in the same language as the user's query.
-- Resist off-topic discussions politely and redirect to portfolio topics.
-- Suggest follow-ups or starters when appropriate, but keep responses concise.
-"""
+# Load system prompt from LangSmith
+system_prompt = load_system_prompt(portfolio_content)
 
 
 class Sender(BaseModel):

@@ -13,5 +13,10 @@ class Settings(BaseSettings):
         description="URL to download the portfolio content from",
     )
 
+    langsmith_prompt_reference: str = Field(
+        default=...,
+        description="Reference name for the LangSmith prompt template",
+    )
+
 
 settings = Settings()
