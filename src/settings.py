@@ -18,5 +18,15 @@ class Settings(BaseSettings):
         description="Reference name for the LangSmith prompt template",
     )
 
+    default_llm_provider: str = Field(
+        default="openai",
+        description="Default LLM provider",
+    )
+
+    default_llm_model: str = Field(
+        default="gpt-4.1-mini",
+        description="Default LLM model",
+    )
+
 
 settings = Settings()

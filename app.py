@@ -1,15 +1,14 @@
 import logging
-import operator
 import uuid
-from typing import Annotated, Self, TypedDict
+from typing import Self
 
 import requests
 import streamlit as st
 from dotenv import load_dotenv
+from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 from langsmith import Client
@@ -24,10 +23,6 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-
-class AgentState(TypedDict):
-    messages: Annotated[list, operator.add]
 
 
 @st.cache_data
@@ -107,13 +102,20 @@ def contact(sender: Sender, subject: str, content: str) -> str:
         return "Error: Could not send message."
 
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+@st.cache_resource
+def get_memory() -> MemorySaver:
+    return MemorySaver()
 
+
+llm = init_chat_model(
+    model=settings.default_llm_model,
+    model_provider=settings.default_llm_provider,
+)
+memory = get_memory()
 tools = [contact]
-memory = MemorySaver()
-agent_executor = create_react_agent(
-    llm,
-    tools,
+graph = create_react_agent(
+    model=llm,
+    tools=tools,
     prompt=system_prompt,
     checkpointer=memory,
 )
@@ -122,49 +124,35 @@ agent_executor = create_react_agent(
 st.set_page_config(page_title="Samuel's AI Portfolio Chatbot", layout="wide")
 st.title("Welcome to Samuel's AI Portfolio Chatbot")
 
-# Initialize session state
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    # Initial welcome message
-    welcome_msg = "Hello! I'm Samuel's AI portfolio assistant. Ask me about his projects, skills, or how to contact him. Use the starters above for ideas."
-    st.session_state.messages.append(AIMessage(content=welcome_msg))
-
 # Generate and store thread_id for this conversation session
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = str(uuid.uuid4())
+    logger.info(f"Generated thread_id: {st.session_state.thread_id}")
 
+config = RunnableConfig(configurable={"thread_id": st.session_state.thread_id})
+
+state = graph.get_state(config)
 
 # Display chat history
-for msg in st.session_state.messages:
-    if isinstance(msg, AIMessage) and not msg.tool_calls:
-        with st.chat_message("assistant"):
-            st.markdown(msg.content)
-    elif isinstance(msg, HumanMessage):
-        with st.chat_message("user"):
-            st.markdown(msg.content)
+with st.chat_message("assistant"):
+    welcome_msg = "Hello! I'm Samuel's AI portfolio assistant. Ask me about his projects, skills, or how to contact him. Use the starters above for ideas."
+    st.markdown(welcome_msg)
+if "messages" in state.values:
+    for msg in state.values["messages"]:
+        if isinstance(msg, AIMessage) and not msg.tool_calls:
+            with st.chat_message("assistant"):
+                st.markdown(msg.content)
+        elif isinstance(msg, HumanMessage):
+            with st.chat_message("user"):
+                st.markdown(msg.content)
 
 
-user_input = st.chat_input("Type your message here...") or st.session_state.get(
-    "user_input", None
-)
-if user_input:
-    st.session_state.messages.append(HumanMessage(content=user_input))
+if user_input := st.chat_input("Type your message here..."):
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Run agent
-    with st.spinner("Thinking..."):
-        config = RunnableConfig(configurable={"thread_id": st.session_state.thread_id})
-        response = agent_executor.invoke(
-            {"messages": st.session_state.messages}, config
-        )
-        st.session_state.messages = response["messages"]
-        ai_response = st.session_state.messages[-1]
+    response = graph.invoke({"messages": [HumanMessage(content=user_input)]}, config)
+    ai_message = response["messages"][-1]
 
-    if ai_response.content:
-        with st.chat_message("assistant"):
-            st.markdown(ai_response.content)
-
-    # Clear temp input
-    if "user_input" in st.session_state:
-        del st.session_state.user_input
+    with st.chat_message("assistant"):
+        st.markdown(ai_message.content)
