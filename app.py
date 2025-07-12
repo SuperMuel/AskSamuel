@@ -136,7 +136,7 @@ state = graph.get_state(config)
 
 # Display chat history
 with st.chat_message("assistant"):
-    welcome_msg = "Hello! I'm Samuel's AI portfolio assistant. Ask me about his projects, skills, or how to contact him. Use the starters above for ideas."
+    welcome_msg = "Hello! I'm Samuel's AI portfolio assistant. Ask me about his projects, skills, or how to contact him."
     st.markdown(welcome_msg)
 if "messages" in state.values:
     for msg in state.values["messages"]:
