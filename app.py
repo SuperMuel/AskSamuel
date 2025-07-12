@@ -1,13 +1,13 @@
-import streamlit as st
-from pydantic import model_validator
-from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
-from langchain_core.messages import HumanMessage, AIMessage
-from langgraph.prebuilt import create_react_agent
-from pydantic import BaseModel, Field
 import operator
-from typing import Annotated, List, Self, TypedDict
+from typing import Annotated, Self, TypedDict
+
+import streamlit as st
 from dotenv import load_dotenv
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import create_react_agent
+from pydantic import BaseModel, Field, model_validator
 
 from src.settings import settings
 
@@ -15,13 +15,13 @@ load_dotenv()
 
 
 class AgentState(TypedDict):
-    messages: Annotated[List, operator.add]
+    messages: Annotated[list, operator.add]
 
 
 @st.cache_data
 def load_portfolio() -> str:
     try:
-        with open(settings.portfolio_path, "r") as f:
+        with settings.portfolio_path.open() as f:
             return f.read()
     except FileNotFoundError:
         return "Portfolio content not found. Please add portfolio.md file."
@@ -31,7 +31,7 @@ portfolio_content: str = load_portfolio()
 
 # System prompt
 system_prompt = f"""
-You are an interactive AI chatbot acting as a dynamic gateway to Samuel's portfolio. 
+You are an interactive AI chatbot acting as a dynamic gateway to Samuel's portfolio.
 Your goal is to demonstrate Samuel's skills as an AI Engineer while providing information about his work, projects, and experience.
 The entire portfolio is provided below for your reference. Always base your answers on this content.
 
