@@ -1,6 +1,8 @@
+import logging
 import operator
 from typing import Annotated, Self, TypedDict
 
+import requests
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage
@@ -13,6 +15,12 @@ from src.settings import settings
 
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
 
 class AgentState(TypedDict):
     messages: Annotated[list, operator.add]
@@ -20,11 +28,9 @@ class AgentState(TypedDict):
 
 @st.cache_data
 def load_portfolio() -> str:
-    try:
-        with settings.portfolio_path.open() as f:
-            return f.read()
-    except FileNotFoundError:
-        return "Portfolio content not found. Please add portfolio.md file."
+    response = requests.get(str(settings.portfolio_content_url), timeout=10)
+    response.raise_for_status()
+    return response.text
 
 
 portfolio_content: str = load_portfolio()
@@ -87,14 +93,14 @@ def contact(sender: Sender, subject: str, content: str) -> str:
         name = sender.name
         email = sender.email
         company = sender.company
-        # For MVP, simulate sending by printing to console (replace with real email/telegram in production)
-        print(
-            f"Contact request:\nName: {name}\nEmail: {email}\nCompany: {company}\nSubject: {subject}\nContent: {content}"
+        # For MVP, simulate sending by logging to console (replace with real email/telegram in production)
+        logger.info(
+            f"Contact request received - Name: {name}, Email: {email}, Company: {company}, Subject: {subject}, Content: {content}"
         )
         # Simulate success (for demo; in real, handle errors)
         return "Success: Message sent to Samuel. He will respond soon."
     except Exception as e:
-        print(f"Error in contact: {e}")
+        logger.error(f"Error in contact function: {e}")
         return "Error: Could not send message."
 
 
