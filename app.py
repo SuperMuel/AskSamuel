@@ -1,13 +1,16 @@
 import logging
 import operator
+import uuid
 from typing import Annotated, Self, TypedDict
 
 import requests
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 from langsmith import Client
 from pydantic import BaseModel, Field, model_validator
@@ -106,12 +109,13 @@ def contact(sender: Sender, subject: str, content: str) -> str:
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
 
-# Create react agent with memory
 tools = [contact]
+memory = MemorySaver()
 agent_executor = create_react_agent(
     llm,
     tools,
     prompt=system_prompt,
+    checkpointer=memory,
 )
 
 # Streamlit app
@@ -124,6 +128,10 @@ if "messages" not in st.session_state:
     # Initial welcome message
     welcome_msg = "Hello! I'm Samuel's AI portfolio assistant. Ask me about his projects, skills, or how to contact him. Use the starters above for ideas."
     st.session_state.messages.append(AIMessage(content=welcome_msg))
+
+# Generate and store thread_id for this conversation session
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = str(uuid.uuid4())
 
 
 # Display chat history
@@ -146,7 +154,10 @@ if user_input:
 
     # Run agent
     with st.spinner("Thinking..."):
-        response = agent_executor.invoke({"messages": st.session_state.messages})
+        config = RunnableConfig(configurable={"thread_id": st.session_state.thread_id})
+        response = agent_executor.invoke(
+            {"messages": st.session_state.messages}, config
+        )
         st.session_state.messages = response["messages"]
         ai_response = st.session_state.messages[-1]
 
