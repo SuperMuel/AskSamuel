@@ -87,15 +87,14 @@ def send_telegram_notification(sender: Sender, subject: str, content: str) -> No
     )
 
     # Format the message
-    message = dedent(f"""🔔 New Contact Inquiry
-                            👤 **Name:** {sender.name or "Not provided"}
-                            📧 **Email:** {sender.email or "Not provided"}
-                            🏢 **Company:** {sender.company or "Not provided"}
-                            📋 **Subject:** {subject}
-
-                            💬 **Message:**
-                            {content}
-                            """)
+    message = dedent(f"""\
+        🔔 New Contact Inquiry
+        👤 **Name:** {sender.name or "Not provided"}
+        📧 **Email:** {sender.email or "Not provided"}
+        🏢 **Company:** {sender.company or "Not provided"}
+        📋 **Subject:** {subject}
+        💬 **Message:**\n{content}
+        """)
 
     # Telegram Bot API endpoint
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
