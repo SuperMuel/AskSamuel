@@ -28,5 +28,15 @@ class Settings(BaseSettings):
         description="Default LLM model",
     )
 
+    telegram_bot_token: str = Field(
+        default=...,
+        description="Telegram bot token for sending notifications",
+    )
+
+    telegram_chat_id: str = Field(
+        default=...,
+        description="Telegram chat ID to send notifications to",
+    )
+
 
 settings = Settings()

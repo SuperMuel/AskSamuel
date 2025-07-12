@@ -1,5 +1,6 @@
 import logging
 import uuid
+from textwrap import dedent
 from typing import Self
 
 import requests
@@ -72,6 +73,47 @@ class Sender(BaseModel):
         return self
 
 
+def send_telegram_notification(sender: Sender, subject: str, content: str) -> None:
+    """Send a notification to Telegram about a new contact inquiry using HTTP API.
+
+    Args:
+        sender: Sender of the message
+        subject: Subject of the message
+        content: Content of the message
+    """
+    logger.info(
+        "Sending Telegram notification.",
+        extra={"sender": sender, "subject": subject, "content": content},
+    )
+
+    # Format the message
+    message = dedent(f"""🔔 New Contact Inquiry
+                            👤 **Name:** {sender.name or "Not provided"}
+                            📧 **Email:** {sender.email or "Not provided"}
+                            🏢 **Company:** {sender.company or "Not provided"}
+                            📋 **Subject:** {subject}
+
+                            💬 **Message:**
+                            {content}
+                            """)
+
+    # Telegram Bot API endpoint
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+
+    # Prepare the payload
+    payload = {
+        "chat_id": settings.telegram_chat_id,
+        "text": message,
+        "parse_mode": "Markdown",
+    }
+
+    # Send the HTTP request
+    response = requests.post(url, json=payload, timeout=10)
+    response.raise_for_status()
+
+    logger.info("Telegram notification sent successfully")
+
+
 @tool
 def contact(sender: Sender, subject: str, content: str) -> str:
     """Contact Samuel on behalf of the user.
@@ -87,17 +129,21 @@ def contact(sender: Sender, subject: str, content: str) -> str:
     if not content:
         return "Error: No content provided."
 
+    name = sender.name
+    email = sender.email
+    company = sender.company
+
     try:
-        name = sender.name
-        email = sender.email
-        company = sender.company
-        # For MVP, simulate sending by logging to console (replace with real email/telegram in production)
+        # Log the contact request
         logger.info(
             f"Contact request received - Name: {name}, Email: {email}, Company: {company}, Subject: {subject}, Content: {content}"
         )
 
-        # Simulate success (for demo; in real, handle errors)
-        return "Success: Message sent to Samuel. He will respond soon."
+        # Send Telegram notification
+        send_telegram_notification(sender, subject, content)
+
+        return "Success: Message sent."
+
     except Exception as e:
         logger.error(f"Error in contact function: {e}")
         return "Error: Could not send message."
