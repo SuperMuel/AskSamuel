@@ -95,6 +95,7 @@ def contact(sender: Sender, subject: str, content: str) -> str:
         logger.info(
             f"Contact request received - Name: {name}, Email: {email}, Company: {company}, Subject: {subject}, Content: {content}"
         )
+
         # Simulate success (for demo; in real, handle errors)
         return "Success: Message sent to Samuel. He will respond soon."
     except Exception as e:
@@ -151,8 +152,51 @@ if user_input := st.chat_input("Type your message here..."):
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    response = graph.invoke({"messages": [HumanMessage(content=user_input)]}, config)
-    ai_message = response["messages"][-1]
-
+    # Create placeholder for streaming response
     with st.chat_message("assistant"):
-        st.markdown(ai_message.content)
+        message_placeholder = st.empty()
+        status_placeholder = st.empty()
+        full_response = ""
+        current_node = None
+
+        try:
+            # Stream tokens from LangGraph
+            for token, metadata in graph.stream(
+                {"messages": [HumanMessage(content=user_input)]},
+                config,
+                stream_mode="messages",
+            ):
+                # Show status for different nodes
+                node_name = (
+                    metadata.get("langgraph_node", "agent")
+                    if isinstance(metadata, dict)
+                    else "agent"
+                )
+                if node_name != current_node:
+                    current_node = node_name
+                    if node_name == "tools":
+                        status_placeholder.info("🔧 Calling tools...")
+                    elif node_name == "agent":
+                        status_placeholder.empty()  # Clear status when back to agent
+
+                # Process AIMessageChunk tokens safely
+                token_content = getattr(token, "content", None)
+                if token_content:
+                    full_response += token_content
+                    # Update the placeholder with accumulated response and cursor
+                    message_placeholder.markdown(full_response + "▌")
+
+            # Final update without cursor and clear status
+            status_placeholder.empty()
+            message_placeholder.markdown(full_response)
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Network error during streaming: {e}")
+            status_placeholder.empty()
+            st.error(
+                "🌐 Network error. Please check your internet connection and try again."
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error during streaming: {e}")
+            status_placeholder.empty()
+            st.error("😔 Something went wrong. Please try again or refresh the page.")
