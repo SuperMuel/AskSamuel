@@ -201,7 +201,46 @@ if "messages" in state.values:
                 st.markdown(msg.content)
 
 
-if user_input := st.chat_input("Type your message here..."):
+if "used_starters" not in st.session_state:
+    st.session_state["used_starters"] = set()
+
+
+def show_starters(questions: list[str]) -> str | None:
+    if not questions:
+        return
+
+    questions = list(set(questions))
+
+    assert len(questions) <= 4
+    for col, question in zip(
+        st.columns(
+            len(questions),
+            border=True,
+        ),
+        questions,
+        strict=True,
+    ):
+        if col.button(
+            question,
+            use_container_width=True,
+            disabled=question in st.session_state["used_starters"],
+            type="tertiary",
+        ):
+            st.session_state["used_starters"].add(question)
+            return question
+
+
+starters = [
+    "Let's talk about his experience.",
+    "What are his skills?",
+    "How to contact him?",
+    "What's the subject of his master thesis?",
+]
+selected_starter = show_starters(starters)
+
+user_input = st.chat_input("Type your message here...") or selected_starter
+
+if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
