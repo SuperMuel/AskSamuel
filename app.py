@@ -140,9 +140,17 @@ with st.chat_message("assistant"):
     st.markdown(welcome_msg)
 if "messages" in state.values:
     for msg in state.values["messages"]:
-        if isinstance(msg, AIMessage) and not msg.tool_calls:
-            with st.chat_message("assistant"):
-                st.markdown(msg.content)
+        if isinstance(msg, AIMessage):
+            if msg.tool_calls:
+                for tool_call in msg.tool_calls:
+                    with st.expander(
+                        f"🔧 Tool call: {tool_call['name'].capitalize()}",
+                        expanded=True,
+                    ):
+                        st.json(tool_call["args"])
+            if msg.content:
+                with st.chat_message("assistant"):
+                    st.markdown(msg.content)
         elif isinstance(msg, HumanMessage):
             with st.chat_message("user"):
                 st.markdown(msg.content)
@@ -155,30 +163,15 @@ if user_input := st.chat_input("Type your message here..."):
     # Create placeholder for streaming response
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
-        status_placeholder = st.empty()
         full_response = ""
-        current_node = None
 
         try:
             # Stream tokens from LangGraph
-            for token, metadata in graph.stream(
+            for token, _ in graph.stream(
                 {"messages": [HumanMessage(content=user_input)]},
                 config,
                 stream_mode="messages",
             ):
-                # Show status for different nodes
-                node_name = (
-                    metadata.get("langgraph_node", "agent")
-                    if isinstance(metadata, dict)
-                    else "agent"
-                )
-                if node_name != current_node:
-                    current_node = node_name
-                    if node_name == "tools":
-                        status_placeholder.info("🔧 Calling tools...")
-                    elif node_name == "agent":
-                        status_placeholder.empty()  # Clear status when back to agent
-
                 # Process AIMessageChunk tokens safely
                 token_content = getattr(token, "content", None)
                 if token_content:
@@ -186,17 +179,15 @@ if user_input := st.chat_input("Type your message here..."):
                     # Update the placeholder with accumulated response and cursor
                     message_placeholder.markdown(full_response + "▌")
 
-            # Final update without cursor and clear status
-            status_placeholder.empty()
             message_placeholder.markdown(full_response)
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Network error during streaming: {e}")
-            status_placeholder.empty()
             st.error(
                 "🌐 Network error. Please check your internet connection and try again."
             )
         except Exception as e:
             logger.error(f"Unexpected error during streaming: {e}")
-            status_placeholder.empty()
             st.error("😔 Something went wrong. Please try again or refresh the page.")
+
+    st.rerun()
