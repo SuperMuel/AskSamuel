@@ -206,25 +206,7 @@ selected_model = (
 )
 
 
-# Add reset chat button to sidebar
-if st.sidebar.button(
-    "🗑️ Reset Chat",
-    help="Clear conversation history and start a new chat",
-    use_container_width=True,
-):
-    # Clear session state
-    if "thread_id" in st.session_state:
-        del st.session_state.thread_id
-    if "used_starters" in st.session_state:
-        del st.session_state.used_starters
-
-    # Generate new thread_id
-    st.session_state.thread_id = str(uuid.uuid4())
-    st.session_state.used_starters = set()
-
-    logger.info(f"Chat reset - new thread_id: {st.session_state.thread_id}")
-    st.rerun()
-
+#
 llm = get_model(selected_model)
 
 st.title("Welcome to Samuel's AI Portfolio Chatbot")
@@ -334,6 +316,27 @@ if "messages" in state.values:
         elif isinstance(msg, HumanMessage):
             with st.chat_message("user"):
                 st.markdown(msg.content)
+
+#  Add reset chat button to sidebar
+if st.sidebar.button(
+    "🗑️ Reset Chat",
+    help="Clear conversation history and start a new chat",
+    use_container_width=True,
+    disabled="messages" not in state.values or len(state.values["messages"]) == 0,
+):
+    # Clear session state
+    if "thread_id" in st.session_state:
+        del st.session_state.thread_id
+    if "used_starters" in st.session_state:
+        del st.session_state.used_starters
+
+    # Generate new thread_id
+    st.session_state.thread_id = str(uuid.uuid4())
+    st.session_state.used_starters = set()
+
+    logger.info(f"Chat reset - new thread_id: {st.session_state.thread_id}")
+    st.rerun()
+
 
 if "used_starters" not in st.session_state:
     st.session_state["used_starters"] = set()
