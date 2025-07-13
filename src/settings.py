@@ -88,8 +88,8 @@ class Settings(BaseSettings):
         default=[
             "Let's talk about his experience.",
             "What are his skills?",
-            "How to contact him?",
-            "What's the subject of his master thesis?",
+            "Can you contact him for me ?",
+            "What's his master thesis about ?",
         ],
         description="Predefined questions to help users start conversations",
     )

@@ -194,6 +194,37 @@ def get_model(model_string: str) -> BaseChatModel:
     )
 
 
+with st.sidebar:
+    # Main introduction
+    st.markdown("### 👋 Welcome!")
+
+    st.markdown("""
+    **This is Samuel Mallet's AI Portfolio Assistant** - an intelligent chatbot that knows everything about his experience, projects, and skills as an AI Engineer.
+
+    🎯 **Currently seeking full-time AI Engineer roles from November 2025**
+    """)
+
+    # Links section
+    st.markdown("### 🔗 Links")
+
+    st.link_button(
+        "Real Portfolio",
+        "https://www.notion.so/supermuel/Samuel-Mallet-AI-Engineer-0cc25a4537884ed09e2c24e06af0bffe",
+        help="View his complete Notion portfolio",
+        use_container_width=True,
+        icon=":material/book:",
+    )
+    st.link_button(
+        "GitHub Profile",
+        "https://github.com/supermuel",
+        help="Browse his code repositories",
+        use_container_width=True,
+        icon=":material/code:",
+    )
+
+    st.divider()
+
+
 selected_model = (
     f"{settings.default_llm_provider}/{settings.default_llm_model}"
     if not settings.allow_model_selection
