@@ -7,6 +7,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
+from langchain.chat_models.base import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -24,6 +25,8 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+st.set_page_config(page_title="Samuel's AI Portfolio Chatbot", layout="wide")
 
 
 @st.cache_data
@@ -154,26 +157,60 @@ def contact(sender: Sender, subject: str, content: str) -> str:
         return "Error: Could not send message."
 
 
+tools = [contact]
+
+
 @st.cache_resource
 def get_memory() -> MemorySaver:
     return MemorySaver()
 
 
-llm = init_chat_model(
-    model=settings.default_llm_model,
-    model_provider=settings.default_llm_provider,
-)
 memory = get_memory()
-tools = [contact]
-graph = create_react_agent(
-    model=llm,
-    tools=tools,
-    prompt=system_prompt,
-    checkpointer=memory,
+
+
+@st.cache_resource
+def get_model(model_string: str) -> BaseChatModel:
+    assert "/" in model_string
+
+    provider, model_name = model_string.split("/", 1)
+
+    return init_chat_model(
+        model=model_name,
+        model_provider=provider,
+    )
+
+
+selected_model = (
+    f"{settings.default_llm_provider}/{settings.default_llm_model}"
+    if not settings.allow_model_selection
+    else st.sidebar.selectbox(
+        "Choose a model:",
+        options=settings.allowed_models,
+        help="Select the AI model to use for responses",
+    )
 )
 
-# Streamlit app
-st.set_page_config(page_title="Samuel's AI Portfolio Chatbot", layout="wide")
+# Add reset chat button to sidebar
+if st.sidebar.button(
+    "🗑️ Reset Chat",
+    help="Clear conversation history and start a new chat",
+    use_container_width=True,
+):
+    # Clear session state
+    if "thread_id" in st.session_state:
+        del st.session_state.thread_id
+    if "used_starters" in st.session_state:
+        del st.session_state.used_starters
+
+    # Generate new thread_id
+    st.session_state.thread_id = str(uuid.uuid4())
+    st.session_state.used_starters = set()
+
+    logger.info(f"Chat reset - new thread_id: {st.session_state.thread_id}")
+    st.rerun()
+
+llm = get_model(selected_model)
+
 st.title("Welcome to Samuel's AI Portfolio Chatbot")
 
 # Generate and store thread_id for this conversation session
@@ -182,6 +219,13 @@ if "thread_id" not in st.session_state:
     logger.info(f"Generated thread_id: {st.session_state.thread_id}")
 
 config = RunnableConfig(configurable={"thread_id": st.session_state.thread_id})
+
+graph = create_react_agent(
+    model=llm,
+    tools=tools,
+    prompt=system_prompt,
+    checkpointer=memory,
+)
 
 state = graph.get_state(config)
 
@@ -205,7 +249,6 @@ if "messages" in state.values:
         elif isinstance(msg, HumanMessage):
             with st.chat_message("user"):
                 st.markdown(msg.content)
-
 
 if "used_starters" not in st.session_state:
     st.session_state["used_starters"] = set()

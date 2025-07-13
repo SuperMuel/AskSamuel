@@ -28,6 +28,19 @@ class Settings(BaseSettings):
         description="Default LLM model",
     )
 
+    allow_model_selection: bool = Field(
+        default=False,
+        description="Allow users to select from available models",
+    )
+
+    allowed_models: list[str] = Field(
+        default=[
+            "openai/gpt-4o-mini",
+            "openai/gpt-4.1-mini",
+        ],
+        description="List of allowed models in the format provider/model_name",
+    )
+
     telegram_bot_token: str = Field(
         default=...,
         description="Telegram bot token for sending notifications",
