@@ -79,5 +79,20 @@ class Settings(BaseSettings):
         description="Telegram chat ID to send notifications to",
     )
 
+    welcome_message: str = Field(
+        default="Hello! I'm Samuel's AI portfolio assistant. Ask me about his projects, skills, or how to contact him.",
+        description="Welcome message displayed to users",
+    )
+
+    starter_questions: list[str] = Field(
+        default=[
+            "Let's talk about his experience.",
+            "What are his skills?",
+            "How to contact him?",
+            "What's the subject of his master thesis?",
+        ],
+        description="Predefined questions to help users start conversations",
+    )
+
 
 settings = Settings()

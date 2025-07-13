@@ -314,8 +314,7 @@ def handle_feedback(
 state = graph.get_state(config)
 # Display chat history
 with st.chat_message("assistant"):
-    welcome_msg = "Hello! I'm Samuel's AI portfolio assistant. Ask me about his projects, skills, or how to contact him."
-    st.markdown(welcome_msg)
+    st.markdown(settings.welcome_message)
 if "messages" in state.values:
     for msg in state.values["messages"]:
         if isinstance(msg, AIMessage):
@@ -365,13 +364,7 @@ def show_starters(questions: list[str]) -> str | None:
             return question
 
 
-starters = [
-    "Let's talk about his experience.",
-    "What are his skills?",
-    "How to contact him?",
-    "What's the subject of his master thesis?",
-]
-selected_starter = show_starters(starters)
+selected_starter = show_starters(settings.starter_questions)
 
 user_input = st.chat_input("Type your message here...") or selected_starter
 
