@@ -1,7 +1,8 @@
 import logging
 import uuid
+from datetime import UTC, datetime
 from textwrap import dedent
-from typing import Self
+from typing import Literal, Self
 
 import requests
 import streamlit as st
@@ -237,8 +238,66 @@ graph = create_react_agent(
     checkpointer=memory,
 )
 
-state = graph.get_state(config)
 
+@st.dialog("Feedback Details")
+def feedback_dialog(feedback: Literal[0, 1], message_id: str) -> None:
+    """Dialog for collecting additional feedback details."""
+    st.write("Thank you for your feedback!")
+
+    if feedback == 0:
+        st.write("We'd appreciate more details to help us improve:")
+    else:
+        st.write("Any additional thoughts? (optional)")
+
+    details = st.text_area(
+        "Additional details:",
+        placeholder="Tell us more about your experience..."
+        if feedback == 0
+        else "What did you like?",
+    )
+
+    if st.button("Submit", type="primary", use_container_width=True):
+        # Store feedback in session state
+        if "feedback_log" not in st.session_state:
+            st.session_state.feedback_log = []
+
+        feedback_entry = {
+            "message_id": message_id,
+            "thread_id": st.session_state.thread_id,
+            "type": feedback,
+            "details": details,
+            "timestamp": datetime.now(UTC),
+        }
+
+        st.session_state.feedback_log.append(feedback_entry)
+
+        # Log the feedback
+        logger.info(
+            f"Feedback received - Type: {feedback}, Message ID: {message_id}, Details: {details}"
+        )
+
+        st.session_state[f"feedback_{message_id}"] = feedback
+
+        st.rerun()
+
+
+def handle_feedback(
+    message_id: str,
+) -> None:
+    last_feedback = st.session_state.get(f"feedback_{message_id}")
+
+    new_feedback = st.feedback(
+        options="thumbs",
+        key=f"feedback_{message_id}_buttons",
+    )
+
+    st.session_state[f"feedback_{message_id}"] = new_feedback
+
+    if new_feedback is not None and new_feedback != last_feedback:
+        feedback_dialog(new_feedback, message_id=message_id)
+
+
+state = graph.get_state(config)
 # Display chat history
 with st.chat_message("assistant"):
     welcome_msg = "Hello! I'm Samuel's AI portfolio assistant. Ask me about his projects, skills, or how to contact him."
@@ -256,6 +315,9 @@ if "messages" in state.values:
             if msg.content:
                 with st.chat_message("assistant"):
                     st.markdown(msg.content)
+
+                    assert msg.id is not None
+                    handle_feedback(message_id=msg.id)
         elif isinstance(msg, HumanMessage):
             with st.chat_message("user"):
                 st.markdown(msg.content)

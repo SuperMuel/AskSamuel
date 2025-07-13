@@ -35,9 +35,9 @@ class Settings(BaseSettings):
 
     allowed_models: list[str] = Field(
         default=[
+            "google_genai/gemini-2.5-flash",
             "openai/gpt-4o-mini",
             "openai/gpt-4.1-mini",
-            "google_genai/gemini-2.5-flash",
         ],
         description="List of allowed models in the format provider/model_name",
     )
