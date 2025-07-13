@@ -7,7 +7,7 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
@@ -34,7 +34,7 @@ def load_portfolio() -> str:
 
 
 @st.cache_data
-def load_system_prompt(portfolio_content: str) -> str:
+def load_system_prompt(portfolio_content: str) -> SystemMessage:
     """Load system prompt from LangSmith and format it with portfolio content."""
     try:
         client = Client()
@@ -47,7 +47,13 @@ def load_system_prompt(portfolio_content: str) -> str:
             {"portfolio_content": portfolio_content}
         )
 
-        return str(formatted_prompt)
+        # Extract just the system message
+        messages = formatted_prompt.to_messages()
+        assert len(messages) == 1
+        system_message = messages[0]
+        assert isinstance(system_message, SystemMessage)
+
+        return system_message
     except Exception as e:
         logger.error(f"Error loading prompt from LangSmith: {e}")
         raise e
