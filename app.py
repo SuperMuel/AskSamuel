@@ -11,6 +11,7 @@ from langchain.chat_models.base import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 from langsmith import Client
@@ -174,6 +175,13 @@ def get_model(model_string: str) -> BaseChatModel:
 
     provider, model_name = model_string.split("/", 1)
 
+    if provider == "google_genai":
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            thinking_budget=4096,  # 0 = no reasoning, 1024 = light, 8192+ = heavy
+            # include_thoughts=True,  # get thought summaries back
+        )
+
     return init_chat_model(
         model=model_name,
         model_provider=provider,
@@ -187,8 +195,10 @@ selected_model = (
         "Choose a model:",
         options=settings.allowed_models,
         help="Select the AI model to use for responses",
+        format_func=lambda x: x.split("/")[1],
     )
 )
+
 
 # Add reset chat button to sidebar
 if st.sidebar.button(
