@@ -9,7 +9,12 @@ import streamlit as st
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain.chat_models.base import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    HumanMessage,
+    SystemMessage,
+)
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -276,6 +281,15 @@ def feedback_dialog(feedback: Literal[0, 1], message_id: str) -> None:
             f"Feedback received - Type: {feedback}, Message ID: {message_id}, Details: {details}"
         )
 
+        client = Client()
+        ls_result = client.create_feedback(
+            key="thumb",
+            score=feedback,
+            trace_id=st.session_state["msg_id_to_trace_id"][message_id],
+            comment=details or None,
+        )
+        logger.info(f"LangSmith feedback created: {ls_result}")
+
         st.session_state[f"feedback_{message_id}"] = feedback
 
         st.rerun()
@@ -361,7 +375,17 @@ selected_starter = show_starters(starters)
 
 user_input = st.chat_input("Type your message here...") or selected_starter
 
+if "msg_id_to_trace_id" not in st.session_state:
+    st.session_state["msg_id_to_trace_id"] = {}
+
 if user_input:
+    trace_id = uuid.uuid4()
+
+    config = RunnableConfig(
+        run_id=trace_id,
+        configurable={"thread_id": st.session_state.thread_id},
+    )
+
     with st.chat_message("user"):
         st.markdown(user_input)
 
@@ -369,6 +393,7 @@ if user_input:
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         full_response = ""
+        assistant_message_id = None
 
         try:
             # Stream tokens from LangGraph
@@ -377,6 +402,13 @@ if user_input:
                 config,
                 stream_mode="messages",
             ):
+                assert isinstance(token, AIMessageChunk)
+                assistant_message_id = token.id
+                if assistant_message_id is not None and token.id:
+                    st.session_state["msg_id_to_trace_id"][assistant_message_id] = (
+                        trace_id
+                    )
+
                 # Process AIMessageChunk tokens safely
                 token_content = getattr(token, "content", None)
                 if token_content:
