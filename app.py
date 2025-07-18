@@ -57,7 +57,10 @@ def load_system_prompt(portfolio_content: str) -> SystemMessage:
 
         # Format the prompt with the portfolio content
         formatted_prompt = prompt_template.invoke(
-            {"portfolio_content": portfolio_content}
+            {
+                "portfolio_content": portfolio_content,
+                "formatted_date": datetime.now(tz=UTC).date().strftime("%B %d, %Y"),
+            }
         )
 
         # Extract just the system message
