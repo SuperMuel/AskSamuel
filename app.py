@@ -21,6 +21,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 from langsmith import Client
+from langsmith.schemas import Attachment
 from pydantic import BaseModel, Field, model_validator
 
 from src.audio import transcribe_audio_with_mistral
@@ -397,7 +398,11 @@ if settings.enable_voice_input and not selected_starter:
             else:
                 st.session_state["last_audio_input"] = voice_message
                 with st.spinner("Transcribing voice message..."):
-                    result = transcribe_audio_with_mistral(voice_message.getvalue())
+                    ls_attachment = Attachment(
+                        mime_type="audio/wav",
+                        data=voice_message.getvalue(),
+                    )
+                    result = transcribe_audio_with_mistral(audio_file=ls_attachment)
                     st.session_state["chat_input"] = result
                     logger.info(f"Transcription result: {result}")
         st.divider()

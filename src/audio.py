@@ -2,14 +2,17 @@ import io
 import logging
 
 import httpx
+from langsmith import traceable
+from langsmith.schemas import Attachment
 
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
 
 
+@traceable()
 def transcribe_audio_with_mistral(
-    audio_bytes: bytes,
+    audio_file: Attachment,
 ) -> str:
     api_key = (
         settings.mistral_api_key.get_secret_value().strip()
@@ -19,8 +22,11 @@ def transcribe_audio_with_mistral(
     if not api_key:
         raise ValueError("Mistral API key is not set")
 
+    data = audio_file.data
+    assert isinstance(data, bytes)
+
     files = {
-        "file": ("audio.wav", io.BytesIO(audio_bytes), "audio/wav"),
+        "file": ("audio.wav", io.BytesIO(data), "audio/wav"),
     }
     data = {"model": "voxtral-mini-latest"}
     headers = {"x-api-key": api_key}
