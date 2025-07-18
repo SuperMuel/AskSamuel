@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from textwrap import dedent
 from typing import Literal, Self
 
-import requests
+import httpx
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
@@ -38,9 +38,10 @@ st.set_page_config(page_title="Samuel's AI Portfolio Chatbot", layout="wide")
 
 @st.cache_data
 def load_portfolio() -> str:
-    response = requests.get(str(settings.portfolio_content_url), timeout=10)
-    response.raise_for_status()
-    return response.text
+    with httpx.Client() as client:
+        response = client.get(str(settings.portfolio_content_url), timeout=10)
+        response.raise_for_status()
+        return response.text
 
 
 @st.cache_data
@@ -123,8 +124,9 @@ def send_telegram_notification(sender: Sender, subject: str, content: str) -> No
     }
 
     # Send the HTTP request
-    response = requests.post(url, json=payload, timeout=10)
-    response.raise_for_status()
+    with httpx.Client() as client:
+        response = client.post(url, json=payload, timeout=10)
+        response.raise_for_status()
 
     logger.info("Telegram notification sent successfully")
 
@@ -445,7 +447,7 @@ if user_input:
 
             message_placeholder.markdown(full_response)
 
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             logger.error(f"Network error during streaming: {e}")
             st.error(
                 "🌐 Network error. Please check your internet connection and try again."
