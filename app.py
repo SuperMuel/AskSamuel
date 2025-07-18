@@ -23,6 +23,7 @@ from langgraph.prebuilt import create_react_agent
 from langsmith import Client
 from pydantic import BaseModel, Field, model_validator
 
+from src.audio import transcribe_audio_with_mistral
 from src.settings import settings
 
 load_dotenv()
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 st.set_page_config(page_title="Samuel's AI Portfolio Chatbot", layout="wide")
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Loading portfolio...")
 def load_portfolio() -> str:
     with httpx.Client() as client:
         response = client.get(str(settings.portfolio_content_url), timeout=10)
@@ -44,7 +45,7 @@ def load_portfolio() -> str:
         return response.text
 
 
-@st.cache_data
+@st.cache_data(show_spinner="Loading portfolio...")
 def load_system_prompt(portfolio_content: str) -> SystemMessage:
     """Load system prompt from LangSmith and format it with portfolio content."""
     try:
@@ -350,27 +351,6 @@ if "messages" in state.values:
             with st.chat_message("user"):
                 st.markdown(msg.content)
 
-#  Add reset chat button to sidebar
-if st.sidebar.button(
-    "🗑️ Reset Chat",
-    help="Clear conversation history and start a new chat",
-    use_container_width=True,
-    disabled="messages" not in state.values or len(state.values["messages"]) == 0,
-):
-    # Clear session state
-    if "thread_id" in st.session_state:
-        del st.session_state.thread_id
-    if "used_starters" in st.session_state:
-        del st.session_state.used_starters
-
-    # Generate new thread_id
-    st.session_state.thread_id = str(uuid.uuid4())
-    st.session_state.used_starters = set()
-
-    logger.info(f"Chat reset - new thread_id: {st.session_state.thread_id}")
-    st.rerun()
-
-
 if "used_starters" not in st.session_state:
     st.session_state["used_starters"] = set()
 
@@ -402,7 +382,51 @@ def show_starters(questions: list[str]) -> str | None:
 
 selected_starter = show_starters(settings.starter_questions)
 
-user_input = st.chat_input("Type your message here...") or selected_starter
+if settings.enable_voice_input and not selected_starter:
+    with st.sidebar:
+        if voice_message := st.audio_input(
+            "You can also speak to me !", key="audio_input"
+        ):
+            logger.info("Voice message received")
+            if (
+                "last_audio_input" in st.session_state
+                and voice_message == st.session_state["last_audio_input"]
+            ):
+                logger.info("Voice message is the same as the last one")
+                # Do nothing. This is useful to avoid re-transcribing the same message on every rerun.
+            else:
+                st.session_state["last_audio_input"] = voice_message
+                with st.spinner("Transcribing voice message..."):
+                    result = transcribe_audio_with_mistral(voice_message.getvalue())
+                    st.session_state["chat_input"] = result
+                    logger.info(f"Transcription result: {result}")
+        st.divider()
+
+#  Add reset chat button to sidebar
+if st.sidebar.button(
+    "🗑️ Reset Chat",
+    help="Clear conversation history and start a new chat",
+    use_container_width=True,
+    disabled="messages" not in state.values or len(state.values["messages"]) == 0,
+):
+    # Clear session state
+    if "thread_id" in st.session_state:
+        del st.session_state.thread_id
+    if "used_starters" in st.session_state:
+        del st.session_state.used_starters
+
+    # Generate new thread_id
+    st.session_state.thread_id = str(uuid.uuid4())
+    st.session_state.used_starters = set()
+
+    logger.info(f"Chat reset - new thread_id: {st.session_state.thread_id}")
+    st.rerun()
+
+
+user_input = (
+    st.chat_input("Type your message here...", key="chat_input") or selected_starter
+)
+
 
 if "msg_id_to_trace_id" not in st.session_state:
     st.session_state["msg_id_to_trace_id"] = {}
