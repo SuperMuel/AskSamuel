@@ -242,7 +242,7 @@ selected_model = (
 #
 llm = get_model(selected_model)
 
-st.title("Welcome to Samuel's AI Portfolio Chatbot")
+st.title("💬 Talk to my Portfolio")
 
 # Generate and store thread_id for this conversation session
 if "thread_id" not in st.session_state:

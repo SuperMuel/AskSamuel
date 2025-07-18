@@ -1,4 +1,6 @@
-from pydantic import Field, HttpUrl, field_validator
+from typing import Self
+
+from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -93,6 +95,29 @@ class Settings(BaseSettings):
         ],
         description="Predefined questions to help users start conversations",
     )
+
+    enable_voice_input: bool = Field(
+        default=False,
+        description="Enable voice input for users",
+    )
+
+    mistral_api_key: SecretStr | None = Field(
+        default=...,
+        description="Mistral API key for using Mistral models",
+    )
+
+    @model_validator(mode="after")
+    def check_voice_input_and_mistral_key(self) -> Self:
+        if self.enable_voice_input:
+            mistral_key = self.mistral_api_key
+            key_missing = (
+                mistral_key is None or not mistral_key.get_secret_value().strip()
+            )
+            if key_missing:
+                raise ValueError(
+                    "Mistral API key must be set if voice input is enabled."
+                )
+        return self
 
 
 settings = Settings()
