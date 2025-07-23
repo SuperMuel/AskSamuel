@@ -45,6 +45,7 @@ name = "ask-samuel"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "filetype" },
     { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-google-genai" },
@@ -65,6 +66,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "filetype", specifier = ">=1.2.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=0.3.26" },
     { name = "langchain-google-genai", specifier = ">=2.1.7" },

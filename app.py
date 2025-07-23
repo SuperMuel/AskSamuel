@@ -2,9 +2,11 @@ import logging
 import uuid
 from datetime import UTC, datetime
 from hashlib import sha256
+from pathlib import Path
 from textwrap import dedent
 from typing import Literal
 
+import filetype
 import httpx
 import streamlit as st
 from dotenv import load_dotenv
@@ -549,6 +551,8 @@ if st.sidebar.button(
         # Don't delete this, or otherwise the previous
         # audio input will still be displayed
         pass
+    if "file_sha256_to_markdown" in st.session_state:
+        del st.session_state.file_sha256_to_markdown
 
     logger.info("Chat reset.")
 
@@ -590,13 +594,84 @@ class UserChatInput(BaseModel):
         return f"UserChatInput(text={self.text!r}, files={files_info})"
 
 
+def validate_file_type(file_content: bytes, filename: str) -> tuple[bool, str]:
+    """
+    Validate if a file is allowed based on its actual content and extension.
+
+    Args:
+        file_content: The binary content of the file
+        filename: The filename including extension
+
+    Returns:
+        Tuple of (is_valid, error_message). If valid, error_message is empty.
+    """
+    # Get file extension
+    file_ext = Path(filename).suffix.lower().lstrip(".")
+
+    # Check if extension is in allowed list
+    if file_ext not in settings.allowed_file_types:
+        return (
+            False,
+            f"File type '.{file_ext}' is not allowed. Allowed types: {', '.join(settings.allowed_file_types)}",
+        )
+
+    # Detect actual file type from content
+    detected_type = filetype.guess(file_content)
+
+    # For plain text files, filetype.guess() might return None
+    if detected_type is None:
+        # If it's a known plain text type, allow it
+        if file_ext in settings.plain_text_types:
+            try:
+                # Try to decode as UTF-8 to verify it's text
+                file_content.decode("utf-8")
+                return True, ""
+            except UnicodeDecodeError:
+                return (
+                    False,
+                    f"File '{filename}' appears to be corrupted or not a valid text file",
+                )
+        else:
+            return False, f"Could not determine file type for '{filename}'"
+
+    # Check if detected MIME type matches allowed MIME types for this extension
+    allowed_mimes = settings.allowed_mime_types.get(file_ext, [])
+    if detected_type.mime not in allowed_mimes:
+        return (
+            False,
+            f"File type '{detected_type.mime}' is not allowed. Allowed types: {', '.join(settings.allowed_mime_types.keys())}",
+        )
+
+    return True, ""
+
+
+def process_plain_text_file(file_content: bytes, filename: str) -> str:
+    """
+    Process plain text files by decoding them directly without OCR.
+
+    Args:
+        file_content: The binary content of the file
+        filename: The filename
+
+    Returns:
+        The decoded text content
+    """
+    try:
+        content = file_content.decode("utf-8")
+        logger.info(f"Processed plain text file '{filename}' directly (bypassed OCR)")
+        return content
+    except UnicodeDecodeError as e:
+        logger.error(f"Failed to decode text file '{filename}': {e}")
+        raise ValueError(f"File '{filename}' is not a valid UTF-8 text file") from e
+
+
 def render_chat_input(*, force_return_text: str | None = None) -> UserChatInput | None:
     logger.debug(f"Rendering chat input. {force_return_text=}")
     if settings.enable_file_upload:
         prompt_data = st.chat_input(
             "Type your message or upload a file...",
             accept_file="multiple",
-            file_type=settings.allowed_file_types,
+            file_type=list(settings.allowed_mime_types.keys()),
             key="chat_input",
             disabled=bool(force_return_text),
         )
@@ -636,21 +711,48 @@ if user_chat_input and user_chat_input.files:
         f"User uploaded {len(user_chat_input.files)} files, processing them..."
     )
     uploaded_files = user_chat_input.files
-    # TODO: validate number of files per session
-    # TODO: validate file size
-    pass
+
+    # Validate max files per session
+    current_file_count = len(st.session_state["file_sha256_to_markdown"])
+    new_file_count = len(uploaded_files)
+    total_file_count = current_file_count + new_file_count
+
+    if total_file_count > settings.max_files_per_session:
+        st.error(
+            f"Maximum {settings.max_files_per_session} files per session. Please reset the chat to upload more files."
+        )
+        st.stop()
 
     for uploaded_file in uploaded_files:
+        # Validate file size
         if uploaded_file.size_bytes > settings.max_file_size_mb * 1024 * 1024:
             st.error(
                 f"File '{uploaded_file.file_name}' is too large (max {settings.max_file_size_mb}MB)."
             )
             st.stop()
+
+        # Validate file type
+        is_valid, error_msg = validate_file_type(
+            uploaded_file.content, uploaded_file.file_name
+        )
+        if not is_valid:
+            st.error(error_msg)
+            st.stop()
+
         try:
             file_bytes = uploaded_file.content
-            markdown_content = cached_ocr_document_with_mistral(
-                file_content=file_bytes, filename=uploaded_file.file_name
-            )
+            file_ext = Path(uploaded_file.file_name).suffix.lower().lstrip(".")
+
+            # Check if this is a plain text file that should bypass OCR
+            if file_ext in settings.plain_text_types:
+                markdown_content = process_plain_text_file(
+                    file_bytes, uploaded_file.file_name
+                )
+            else:
+                markdown_content = cached_ocr_document_with_mistral(
+                    file_content=file_bytes, filename=uploaded_file.file_name
+                )
+
             if not markdown_content:
                 st.error(f"File '{uploaded_file.file_name}' looks empty.")
                 st.stop()

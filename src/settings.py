@@ -158,8 +158,26 @@ class Settings(BaseSettings):
             "doc",
             "txt",
             "md",
-        ],  # TODO: we should not use mistral-ocr for txt and md
+        ],
         description="Allowed file extensions for upload.",
+    )
+
+    # MIME types mapping for allowed file types
+    allowed_mime_types: dict[str, list[str]] = Field(
+        default={
+            "pdf": ["application/pdf"],
+            # "docx": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+            # "doc": ["application/msword"],
+            "txt": ["text/plain"],
+            "md": ["text/plain", "text/markdown"],
+        },
+        description="Mapping of file extensions to their allowed MIME types.",
+    )
+
+    # File types that should bypass OCR processing
+    plain_text_types: list[str] = Field(
+        default=["txt", "md"],
+        description="File extensions that contain plain text and should bypass OCR processing.",
     )
 
     logging_level: str = Field(
