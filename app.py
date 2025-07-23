@@ -28,7 +28,7 @@ from langsmith.schemas import Attachment
 from pydantic import BaseModel, Field, field_validator
 
 from src.audio import transcribe_audio_with_mistral
-from src.ocr import process_document_with_mistral
+from src.ocr import uncached_ocr_document_with_mistral
 from src.settings import settings
 from src.utils import hide_documents_from_user_message, truncate_display_filename
 
@@ -114,6 +114,12 @@ def load_system_prompt(portfolio_content: str) -> SystemMessage:
         raise e
 
 
+@st.cache_data(show_spinner="Processing uploaded documents...")
+def cached_ocr_document_with_mistral(file_content: bytes, filename: str) -> str:
+    logger.info(f"Caching OCR for {filename}")
+    return uncached_ocr_document_with_mistral(file_content, filename)
+
+
 logger.info("Calling load_portfolio()")
 portfolio_content: str = load_portfolio()
 
@@ -125,9 +131,17 @@ system_prompt = load_system_prompt(portfolio_content)
 class Sender(BaseModel):
     """Sender of the message. Mandatory so Samuel can contact them back."""
 
-    name: str = Field(..., description="Name of the sender.")
-    email: str = Field(..., description="Email of the sender")
-    company: str | None = Field(default=None, description="Company of the sender")
+    name: str = Field(
+        ..., description="Name of the sender. Can be inferred from the email address."
+    )
+    email: str = Field(
+        ...,
+        description="Email of the sender. Should never be inferred from the context. Always ask for it.",
+    )
+    company: str | None = Field(
+        default=None,
+        description="Company of the sender. Can be inferred from the email address or the conversation context.",
+    )
 
     @field_validator("email")
     @classmethod
@@ -449,7 +463,8 @@ def render_message_history(state: StateSnapshot) -> None:
                 with st.expander(f"🔧 Tool call: {msg.name}", expanded=False):
                     st.json(msg)
         else:
-            raise ValueError(f"Unexpected message type: {type(msg)}")
+            logger.warning(f"Unexpected message type: {type(msg)}")
+            continue
 
 
 # Display chat history
@@ -621,36 +636,35 @@ if user_chat_input and user_chat_input.files:
         f"User uploaded {len(user_chat_input.files)} files, processing them..."
     )
     uploaded_files = user_chat_input.files
-    with st.spinner("Processing uploaded documents..."):
-        # TODO: validate number of files per session
-        # TODO: validate file size
-        pass
+    # TODO: validate number of files per session
+    # TODO: validate file size
+    pass
 
-        for uploaded_file in uploaded_files:
-            if uploaded_file.size_bytes > settings.max_file_size_mb * 1024 * 1024:
-                st.error(
-                    f"File '{uploaded_file.file_name}' is too large (max {settings.max_file_size_mb}MB)."
-                )
+    for uploaded_file in uploaded_files:
+        if uploaded_file.size_bytes > settings.max_file_size_mb * 1024 * 1024:
+            st.error(
+                f"File '{uploaded_file.file_name}' is too large (max {settings.max_file_size_mb}MB)."
+            )
+            st.stop()
+        try:
+            file_bytes = uploaded_file.content
+            markdown_content = cached_ocr_document_with_mistral(
+                file_content=file_bytes, filename=uploaded_file.file_name
+            )
+            if not markdown_content:
+                st.error(f"File '{uploaded_file.file_name}' looks empty.")
                 st.stop()
-            try:
-                file_bytes = uploaded_file.content
-                markdown_content = process_document_with_mistral(
-                    file_content=file_bytes, filename=uploaded_file.file_name
-                )
-                if not markdown_content:
-                    st.error(f"File '{uploaded_file.file_name}' looks empty.")
-                    st.stop()
 
-                st.session_state["file_sha256_to_markdown"][uploaded_file.sha256] = (
-                    markdown_content
-                )
+            st.session_state["file_sha256_to_markdown"][uploaded_file.sha256] = (
+                markdown_content
+            )
 
-            except Exception as e:
-                logger.error(f"Failed to process file {uploaded_file.file_name}: {e}")
-                st.error(
-                    f"Sorry, there was an error processing '{uploaded_file.file_name}'."
-                )
-                st.stop()
+        except Exception as e:
+            logger.error(f"Failed to process file {uploaded_file.file_name}: {e}")
+            st.error(
+                f"Sorry, there was an error processing '{uploaded_file.file_name}'."
+            )
+            st.stop()
 
 
 if user_chat_input:

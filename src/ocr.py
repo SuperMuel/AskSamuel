@@ -37,7 +37,7 @@ def _get_mime_type(filename: str) -> str:
 
 
 # @traceable(name="mistral_ocr_processing") #TODO : re-implement traceable with Attachement
-def process_document_with_mistral(file_content: bytes, filename: str) -> str:
+def uncached_ocr_document_with_mistral(file_content: bytes, filename: str) -> str:
     """
     Processes a document using Mistral OCR and returns its content as Markdown.
 

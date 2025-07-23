@@ -21,12 +21,12 @@ class Settings(BaseSettings):
     )
 
     default_llm_provider: str = Field(
-        default="google_genai",
+        default="openai",
         description="Default LLM provider",
     )
 
     default_llm_model: str = Field(
-        default="gemini-2.5-flash",
+        default="o4-mini",
         description="Default LLM model",
     )
 
